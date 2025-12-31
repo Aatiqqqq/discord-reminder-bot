@@ -5,7 +5,7 @@ const client = new Client({
 });
 
 // 🔴 TEMPORARY: hard-code token to bypass Railway issues
-const TOKEN = "MTQ1NTg5NzQyNDAzNTA1NzcyMA.G43JHi.eIC2tiZgR0DqBcZKJwgwCcOiEMYIwG8vzqRsII";
+const TOKEN = "MTQ1NTg5NzQyNDAzNTA1NzcyMA.G-V8Yk.0zFuXKX9L1Nf3uTsquMG1x60w7MpyG1Qy2qUfk";
 
 // 🔴 EDIT THESE
 const CHANNEL_ID = "1452279184847142932";
