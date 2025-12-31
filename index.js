@@ -4,36 +4,47 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// 🔴 TEMPORARY: hard-code token to bypass Railway issues
 const TOKEN = process.env.TOKEN;
-// 🔴 EDIT THESE
-const CHANNEL_ID = "1452279184847142932";
-const IMAGE_URL = "https://www.pngkey.com/png/full/141-1416726_wasted-transparent-gta-wasted-transparent.png";
+const CHANNEL_ID = "https://discord.com/channels/1433087368335724616/1452279184847142932";
+const IMAGE_URL = "https://www.gtabase.com/igallery/8901-9000/gtaonline-lossantosdrugwars-thelastdose-artwork-png-8940-1600.png";
+
+if (!TOKEN) {
+  console.error("TOKEN missing");
+  process.exit(1);
+}
 
 client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`Logged in as ${client.user.tag}`);
 
-  // 🔁 MAIN REMINDER LOOP (keeps process alive)
+  // Force online presence (visual)
+  client.user.setPresence({
+    status: "online",
+    activities: [{ name: "Repair reminders", type: 0 }]
+  });
+
   setInterval(() => {
     const channel = client.channels.cache.get(CHANNEL_ID);
-    if (!channel) {
-      console.log("❌ Channel not found");
-      return;
+    if (!channel) return;
+
+    // London time (UTC-based)
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const london = new Date(utc);
+    const minutes = london.getMinutes();
+
+    // Send at :00 and :30
+    if (minutes === 0 || minutes === 30) {
+      channel.send({
+        content:
+          "🔧 **Repair all solar panels if planted**\n" +
+          "**Bonus will be provided 💰**\n\n" +
+          "🟢 *React if repaired*",
+        files: [IMAGE_URL]
+      });
+
+      console.log("Message sent");
     }
-
-    channel.send({
-      content: `🔧 **Repair all solar panels** – if planted, bonus will be provided 💰`,
-      files: [IMAGE_URL]
-    });
-
-    console.log("✅ Message sent");
-
-  }, 10 * 1000); // every 10 seconds (test mode)
+  }, 60 * 1000);
 });
-
-// 🔁 EXTRA KEEP-ALIVE (important for Railway)
-setInterval(() => {
-  console.log("🟢 Process alive");
-}, 60 * 1000);
 
 client.login(TOKEN);
