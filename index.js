@@ -21,6 +21,8 @@ const IMAGE_URL =
   "https://www.gtabase.com/igallery/gta5-character-art/gtaonline-the-chop-shop-dlc-artwork-1600.png";
 
 const EMOJI = "🌿";
+const THIRTY_MINUTES = 30 * 60 * 1000;
+const REMINDER_FILE = "./lastReminder.json";
 // =========================================
 
 // ================= CLIENT =================
@@ -43,16 +45,28 @@ function savePoints() {
   fs.writeFileSync("points.json", JSON.stringify(points, null, 2));
 }
 
-// Track reminder messages so points count only once per message
 const trackedMessages = new Map();
 let leaderboardMessageId = null;
 
+// ================= REMINDER STORAGE =================
+function getLastSent() {
+  if (!fs.existsSync(REMINDER_FILE)) {
+    fs.writeFileSync(REMINDER_FILE, JSON.stringify({ lastSent: 0 }));
+    return 0;
+  }
+  return JSON.parse(fs.readFileSync(REMINDER_FILE, "utf8")).lastSent || 0;
+}
+
+function setLastSent(time) {
+  fs.writeFileSync(
+    REMINDER_FILE,
+    JSON.stringify({ lastSent: time }, null, 2)
+  );
+}
+
 // ================= SLASH COMMAND =================
 const commands = [
-  {
-    name: "my-points",
-    description: "Show your family points and rank"
-  }
+  { name: "my-points", description: "Show your family points and rank" }
 ];
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -81,19 +95,13 @@ async function buildLeaderboard() {
       text += `${i + 1}️⃣ ${user.username} — ${sorted[i][1]} 🌿\n`;
     }
   }
-
   return text;
 }
-
-// ================= REMINDER LOGIC =================
-const THIRTY_MINUTES = 30 * 60 * 1000;
-let lastSent = Date.now(); // start counting from bot start
 
 // ================= READY =================
 client.once("ready", async () => {
   console.log(`🤖 Bot online as ${client.user.tag}`);
 
-  // ===== CREATE LEADERBOARD MESSAGE (ONCE) =====
   const leaderboardChannel = await client.channels.fetch(
     LEADERBOARD_CHANNEL_ID
   );
@@ -111,36 +119,14 @@ client.once("ready", async () => {
   });
 
   leaderboardMessageId = leaderboardMsg.id;
+});
 
-  // ===== REMINDER EVERY 30 MINUTES =====
- const fs = require("fs");
-
-const REMINDER_FILE = "./lastReminder.json";
-const THIRTY_MINUTES = 30 * 60 * 1000;
-
-// Load last sent time safely
-function getLastSent() {
-  if (!fs.existsSync(REMINDER_FILE)) {
-    fs.writeFileSync(REMINDER_FILE, JSON.stringify({ lastSent: 0 }));
-    return 0;
-  }
-  return JSON.parse(fs.readFileSync(REMINDER_FILE)).lastSent || 0;
-}
-
-function setLastSent(time) {
-  fs.writeFileSync(
-    REMINDER_FILE,
-    JSON.stringify({ lastSent: time }, null, 2)
-  );
-}
-
-// ===== REMINDER CHECK LOOP =====
+// ================= REMINDER LOOP =================
 setInterval(async () => {
   try {
     const lastSent = getLastSent();
     const now = Date.now();
 
-    // Debug (VERY IMPORTANT)
     console.log(
       "⏱ Reminder check | last:",
       new Date(lastSent).toLocaleTimeString(),
@@ -164,15 +150,46 @@ setInterval(async () => {
     await msg.react(EMOJI);
 
     setLastSent(now);
-    console.log("✅ Reminder sent correctly");
+    console.log("✅ Reminder sent");
   } catch (err) {
     console.error("❌ Reminder error:", err);
   }
-}, 60 * 1000); // check every minute
+}, 60 * 1000);
+
+// ================= REACTIONS =================
+client.on("messageReactionAdd", async (reaction, user) => {
+  try {
+    if (reaction.partial) await reaction.fetch();
+    if (user.bot) return;
+    if (reaction.emoji.name !== EMOJI) return;
+
+    const msg = reaction.message;
+    if (!trackedMessages.has(msg.id)) return;
+
+    const used = trackedMessages.get(msg.id);
+    if (used.has(user.id)) return;
+
+    used.add(user.id);
+    points[user.id] = (points[user.id] || 0) + 1;
+    savePoints();
+
+    const leaderboardChannel = await client.channels.fetch(
+      LEADERBOARD_CHANNEL_ID
+    );
+    const leaderboardMsg =
+      await leaderboardChannel.messages.fetch(leaderboardMessageId);
+
+    leaderboardMsg.edit({
+      content: await buildLeaderboard(),
+      components: leaderboardMsg.components
+    });
+  } catch (err) {
+    console.error("Reaction error:", err);
+  }
+});
 
 // ================= INTERACTIONS =================
 client.on("interactionCreate", async interaction => {
-  // BUTTON
   if (interaction.isButton() && interaction.customId === "show_points") {
     const id = interaction.user.id;
 
@@ -186,17 +203,16 @@ client.on("interactionCreate", async interaction => {
     const sorted = Object.entries(points).sort((a, b) => b[1] - a[1]);
     const rank = sorted.findIndex(x => x[0] === id) + 1;
 
-    return interaction.reply({
+    interaction.reply({
       ephemeral: true,
       content:
         `🌿 **YOUR FAMILY POINTS**\n\n` +
-        `👤 Name: ${interaction.user.username}\n` +
+        `👤 ${interaction.user.username}\n` +
         `🏆 Rank: #${rank}\n` +
         `🌿 Points: ${points[id]} 🌿`
     });
   }
 
-  // /my-points
   if (
     interaction.isChatInputCommand() &&
     interaction.commandName === "my-points"
@@ -217,7 +233,7 @@ client.on("interactionCreate", async interaction => {
       ephemeral: true,
       content:
         `🌿 **YOUR FAMILY POINTS**\n\n` +
-        `👤 Name: ${interaction.user.username}\n` +
+        `👤 ${interaction.user.username}\n` +
         `🏆 Rank: #${rank}\n` +
         `🌿 Points: ${points[id]} 🌿`
     });
